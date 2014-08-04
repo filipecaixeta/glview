@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include <iostream>
+#include <math.h>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -15,10 +17,26 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(this,SIGNAL(on_actionUseRadians(bool)),ui->glView,SLOT(setRad(bool)));
     connect(this,SIGNAL(on_actionLight(float,float,float)),ui->glView,SLOT(setLightPosition(float,float,float)));
+
+    connect(this,SIGNAL(on_newSerialData(unsigned char,double)),this,SLOT(newData(unsigned char,double)));
+    connect(this,SIGNAL(rotateModel(unsigned char,double)),ui->glView,SLOT(rotate(unsigned char,double)));
+
+    preprocessfunc=NULL;
+
+    serialConnection=false;
+    serial = new QSerialPort(this);
+    serialData.controle=11;
+    connect(serial, SIGNAL(readyRead()), this, SLOT(readData()));
 }
 
 MainWindow::~MainWindow()
 {
+    try
+    {
+        serial->close();
+    }
+    catch (std::exception e)
+    {}
     delete ui;
 }
 
@@ -104,4 +122,99 @@ void MainWindow::on_actionAbout_triggered()
                    "DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT "
                    "OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>");
     msgBox.exec();
+}
+
+void MainWindow::on_actionSerial_Port_triggered()
+{
+    SerialWindow *w=new SerialWindow(this,ui->glView);
+    w->setConnected(serialConnection);
+    w->show();
+}
+
+void MainWindow::on_connectSerial(SerialWindow::Settings _settings)
+{
+    serialSettings=_settings;
+    serial->setPortName(serialSettings.name);
+    serial->setBaudRate(serialSettings.baudRate);
+    serial->setDataBits(serialSettings.dataBits);
+    serial->setParity(serialSettings.parity);
+    serial->setStopBits(serialSettings.stopBits);
+    serial->setFlowControl(serialSettings.flowControl);
+    if (serial->open(QIODevice::ReadWrite))
+    {
+        serialConnection=true;
+        ui->statusBar->showMessage(tr("Connected to %1 : %2, %3, %4, %5, %6")
+                        .arg(serialSettings.name).arg(serialSettings.stringBaudRate)
+                        .arg(serialSettings.stringDataBits).arg(serialSettings.stringParity)
+                        .arg(serialSettings.stringStopBits).arg(serialSettings.stringFlowControl));
+    }
+    else
+    {
+        QMessageBox::critical(this, tr("Error"), serial->errorString());
+        ui->statusBar->showMessage(tr("Open error"));
+    }
+}
+
+void MainWindow::on_disconnectSerial()
+{
+    serial->close();
+    serialConnection=false;
+    ui->statusBar->showMessage(tr("Disconnected"));
+}
+
+void MainWindow::readData()
+{
+    QByteArray data = serial->readAll();
+    foreach (unsigned char c, data)
+    {
+        if (c=='*' && serialData.controle>6)
+            serialData.controle=0;
+        else if (c=='\n' && serialData.controle==6)
+        {
+            emit on_newSerialData(serialData.header,serialData.data);
+            serialData.controle=7;
+        }
+        else
+        {
+            serialData.controle++;
+            switch (serialData.controle)
+            {
+            case 1:
+                serialData.header=c;
+                break;
+            case 2:
+                serialData.dataI=c<<24;
+                break;
+            case 3:
+                serialData.dataI+=c<<16;
+                break;
+            case 4:
+                serialData.dataI+=c<<8;
+                break;
+            case 5:
+                serialData.dataI+=c;
+                break;
+            case 6:
+                serialData.data=serialData.dataI*pow(10,c>127?c-256:c);
+                break;
+            default:
+                break;
+            }
+        }
+    }
+}
+
+void MainWindow::newData(unsigned char header,double val)
+{
+    if (preprocessfunc!=NULL)
+        preprocessfunc(header,val);
+    if (header==AXIS_X || header==AXIS_Y || header==AXIS_Z)
+        emit rotateModel(header,val);
+    else
+        std::cout << "treta\n";
+}
+
+void MainWindow::setPreProcessFunc(void(*_preprocessfunc)(unsigned char,double&))
+{
+    preprocessfunc=_preprocessfunc;
 }

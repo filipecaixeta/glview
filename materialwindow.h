@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <defines.h>
+#include <QtSerialPort/QSerialPort>
 
 namespace Ui {
 class MaterialWindow;

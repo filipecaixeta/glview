@@ -1,9 +1,9 @@
 #ifndef DEFINES_H
 #define DEFINES_H
 
-#define AXIS_X 0b00000001
-#define AXIS_Y 0b00000010
-#define AXIS_Z 0b00000100
+#define AXIS_X 1
+#define AXIS_Y 2
+#define AXIS_Z 4
 #define ROTATION_ABS 0b00000001
 #define ROTATION_REL 0b00000010
 #define ROTATION_DEG 0b00000100
