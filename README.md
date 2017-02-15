@@ -1,4 +1,7 @@
-glview
+Glview
+
+Get data from Arduino to rotate a 3D model.
+
 ======
 
 REQUISITOS
